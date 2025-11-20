@@ -1,0 +1,5 @@
+{
+  "name": "Astibot - Crypto Trading Bot Simulator",
+  "description": "A simple, visual, and automated trading bot simulator for cryptocurrencies, designed to backtest strategies based on MACD-like and risk indicators.",
+  "requestFramePermissions": []
+}
