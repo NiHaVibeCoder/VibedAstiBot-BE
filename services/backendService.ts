@@ -33,13 +33,11 @@ class BackendService {
     }
 
     this.isConnecting = true;
-    console.log('Connecting to backend WebSocket...');
 
     try {
       this.ws = new WebSocket(WS_URL);
 
       this.ws.onopen = () => {
-        console.log('Connected to backend');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
         // Request current state
@@ -63,7 +61,6 @@ class BackendService {
       };
 
       this.ws.onclose = () => {
-        console.log('WebSocket closed');
         this.isConnecting = false;
         this.attemptReconnect();
       };
@@ -77,7 +74,6 @@ class BackendService {
   private attemptReconnect() {
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
       setTimeout(() => {
         this.connect();
       }, this.reconnectDelay);

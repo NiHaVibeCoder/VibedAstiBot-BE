@@ -114,9 +114,9 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
 
     // Simulate a random connection drop for non-backtest mode
     if (!backtestData && Math.random() < 0.001) { // 0.1% chance of drop per tick
-        console.warn('Simulating connection drop.');
-        disconnect();
-        return;
+      console.warn('Simulating connection drop.');
+      disconnect();
+      return;
     }
 
     const fastPeriod = Math.round(5 + (100 - settings.dipsSensitivity) * 0.45);
@@ -168,7 +168,7 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
         let newBase = currentAccount.base;
         let newQuote = currentAccount.quote;
         let tradeExecuted: Trade | null = null;
-        
+
         let openPositions = [...openPositionsRef.current];
         let positionToSell: Trade | null = null;
         let reasonForSale = '';
@@ -177,76 +177,76 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
         // --- SELL LOGIC ---
         // First, check for stop-loss or sell-trigger on any position
         for (let i = 0; i < openPositions.length; i++) {
-            const pos = openPositions[i];
-            const stopLossPrice = pos.price * (1 - settings.stopLossPercentage / 100);
-            const sellTriggerPrice = pos.price * (1 + settings.sellTriggerPercentage / 100);
+          const pos = openPositions[i];
+          const stopLossPrice = pos.price * (1 - settings.stopLossPercentage / 100);
+          const sellTriggerPrice = pos.price * (1 + settings.sellTriggerPercentage / 100);
 
-            if (newPrice <= stopLossPrice) {
-                positionToSell = pos;
-                reasonForSale = 'Stop Loss';
-                positionIndex = i;
-                break;
-            }
-            if (settings.sellTriggerPercentage > 0 && newPrice >= sellTriggerPrice) {
-                positionToSell = pos;
-                reasonForSale = 'Sell Trigger';
-                positionIndex = i;
-                break;
-            }
+          if (newPrice <= stopLossPrice) {
+            positionToSell = pos;
+            reasonForSale = 'Stop Loss';
+            positionIndex = i;
+            break;
+          }
+          if (settings.sellTriggerPercentage > 0 && newPrice >= sellTriggerPrice) {
+            positionToSell = pos;
+            reasonForSale = 'Sell Trigger';
+            positionIndex = i;
+            break;
+          }
         }
 
         // If no individual trigger, check for general MACD sell signal (FIFO)
         if (!positionToSell && fastMA < slowMA && prevFastMA >= prevSlowMA && openPositions.length > 0) {
-            positionToSell = openPositions[0]; // Oldest is at the start
-            reasonForSale = 'MACD Crossover';
-            positionIndex = 0;
+          positionToSell = openPositions[0]; // Oldest is at the start
+          reasonForSale = 'MACD Crossover';
+          positionIndex = 0;
         }
 
         if (positionToSell) {
-            const sellAmount = positionToSell.amount;
-            newQuote += sellAmount * newPrice;
-            newBase -= sellAmount;
-            tradeExecuted = { id: tradeIdCounterRef.current++, type: TradeType.SELL, price: newPrice, time: newTime, amount: sellAmount, reason: reasonForSale };
-            openPositions.splice(positionIndex, 1); // Remove sold position
-            
-            // Send Telegram Sell Notification
-            if (settings.telegramSettings.enableSellNotifications) {
-              const formattedProfit = ((newPrice - positionToSell.price) / positionToSell.price * 100).toFixed(2);
-              sendTelegramMessageWrapper(
-                `<b>📉 VERKAUF</b> ${settings.tradingPair}\n` +
-                `Zeit: ${new Date(newTime).toLocaleString()}\n` +
-                `Preis: ${newPrice.toFixed(2)} ${settings.tradingPair.split('-')[1]}\n` +
-                `Menge: ${sellAmount.toFixed(6)} ${settings.tradingPair.split('-')[0]}\n` +
-                `Grund: ${reasonForSale}\n` +
-                `Gewinn/Verlust: ${formattedProfit}%`
-              );
-            }
+          const sellAmount = positionToSell.amount;
+          newQuote += sellAmount * newPrice;
+          newBase -= sellAmount;
+          tradeExecuted = { id: tradeIdCounterRef.current++, type: TradeType.SELL, price: newPrice, time: newTime, amount: sellAmount, reason: reasonForSale };
+          openPositions.splice(positionIndex, 1); // Remove sold position
+
+          // Send Telegram Sell Notification
+          if (settings.telegramSettings.enableSellNotifications) {
+            const formattedProfit = ((newPrice - positionToSell.price) / positionToSell.price * 100).toFixed(2);
+            sendTelegramMessageWrapper(
+              `<b>📉 VERKAUF</b> ${settings.tradingPair}\n` +
+              `Zeit: ${new Date(newTime).toLocaleString()}\n` +
+              `Preis: ${newPrice.toFixed(2)} ${settings.tradingPair.split('-')[1]}\n` +
+              `Menge: ${sellAmount.toFixed(6)} ${settings.tradingPair.split('-')[0]}\n` +
+              `Grund: ${reasonForSale}\n` +
+              `Gewinn/Verlust: ${formattedProfit}%`
+            );
+          }
         }
         // --- BUY LOGIC ---
         // Can only buy if we didn't sell this tick and have capacity
         else if (fastMA > slowMA && prevFastMA <= prevSlowMA && openPositions.length < settings.maxConcurrentPositions) {
-            if (riskLine && newPrice < riskLine) {
-                const tradeAmountQuote = currentAccount.quote * (settings.tradeAmountPercentage / 100);
-                // Ensure we don't trade with dust
-                if (currentAccount.quote >= tradeAmountQuote && tradeAmountQuote > 1) { 
-                    const buyAmount = tradeAmountQuote / newPrice;
-                    newBase += buyAmount;
-                    newQuote -= tradeAmountQuote;
-                    tradeExecuted = { id: tradeIdCounterRef.current++, type: TradeType.BUY, price: newPrice, time: newTime, amount: buyAmount, reason: 'MACD Crossover' };
-                    openPositions.push(tradeExecuted);
+          if (riskLine && newPrice < riskLine) {
+            const tradeAmountQuote = currentAccount.quote * (settings.tradeAmountPercentage / 100);
+            // Ensure we don't trade with dust
+            if (currentAccount.quote >= tradeAmountQuote && tradeAmountQuote > 1) {
+              const buyAmount = tradeAmountQuote / newPrice;
+              newBase += buyAmount;
+              newQuote -= tradeAmountQuote;
+              tradeExecuted = { id: tradeIdCounterRef.current++, type: TradeType.BUY, price: newPrice, time: newTime, amount: buyAmount, reason: 'MACD Crossover' };
+              openPositions.push(tradeExecuted);
 
-                    // Send Telegram Buy Notification
-                    if (settings.telegramSettings.enableBuyNotifications) {
-                      sendTelegramMessageWrapper(
-                        `<b>📈 KAUF</b> ${settings.tradingPair}\n` +
-                        `Zeit: ${new Date(newTime).toLocaleString()}\n` +
-                        `Preis: ${newPrice.toFixed(2)} ${settings.tradingPair.split('-')[1]}\n` +
-                        `Menge: ${buyAmount.toFixed(6)} ${settings.tradingPair.split('-')[0]}\n` +
-                        `Grund: MACD Crossover`
-                      );
-                    }
-                }
+              // Send Telegram Buy Notification
+              if (settings.telegramSettings.enableBuyNotifications) {
+                sendTelegramMessageWrapper(
+                  `<b>📈 KAUF</b> ${settings.tradingPair}\n` +
+                  `Zeit: ${new Date(newTime).toLocaleString()}\n` +
+                  `Preis: ${newPrice.toFixed(2)} ${settings.tradingPair.split('-')[1]}\n` +
+                  `Menge: ${buyAmount.toFixed(6)} ${settings.tradingPair.split('-')[0]}\n` +
+                  `Grund: MACD Crossover`
+                );
+              }
             }
+          }
         }
 
         const newTotalValue = newQuote + newBase * newPrice;
@@ -268,35 +268,33 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
 
   const connect = useCallback(() => {
     if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
     }
 
     if (backtestData) {
-        if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = window.setInterval(runSimulationTick, settings.backtestSpeed);
-        setConnectionStatus('connected');
-        return;
+      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+      simulationIntervalRef.current = window.setInterval(runSimulationTick, settings.backtestSpeed);
+      setConnectionStatus('connected');
+      return;
     }
 
     setConnectionStatus('connecting');
-    console.log('Attempting to connect...');
 
     setTimeout(() => {
-        if (!isRunningRef.current) {
-            setConnectionStatus('connected'); // Reset to idle state
-            return;
-        }
-        
-        console.log('Connection established.');
-        if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
-        simulationIntervalRef.current = window.setInterval(runSimulationTick, SIMULATION_TICK_MS);
-        setConnectionStatus('connected');
+      if (!isRunningRef.current) {
+        setConnectionStatus('connected'); // Reset to idle state
+        return;
+      }
 
-        // Send Telegram connection success notification if enabled and was previously disconnected
-        if (connectionStatus === 'disconnected' && settings.telegramSettings.enableErrorNotifications) {
-          sendTelegramMessageWrapper(`<b>✅ Verbindung wiederhergestellt!</b> Astibot ist wieder online und empfängt Marktdaten.`);
-        }
+      if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+      simulationIntervalRef.current = window.setInterval(runSimulationTick, SIMULATION_TICK_MS);
+      setConnectionStatus('connected');
+
+      // Send Telegram connection success notification if enabled and was previously disconnected
+      if (connectionStatus === 'disconnected' && settings.telegramSettings.enableErrorNotifications) {
+        sendTelegramMessageWrapper(`<b>✅ Verbindung wiederhergestellt!</b> Astibot ist wieder online und empfängt Marktdaten.`);
+      }
 
     }, 1500);
 
@@ -306,7 +304,6 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
   useEffect(() => {
     if (connectionStatus === 'disconnected' && isRunning) {
       reconnectTimerRef.current = window.setTimeout(() => {
-        console.log('Connection lost. Attempting to reconnect...');
         connect();
       }, 1500);
     }
@@ -384,13 +381,13 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
         clearInterval(periodicTelegramTimerRef.current);
         periodicTelegramTimerRef.current = null;
       }
-      
+
       setConnectionStatus('connected');
 
       // The isRunningRef.current check ensures this only runs when transitioning from running to stopped.
       // chartData.length > 1 prevents creating a summary for an empty or freshly reset simulation.
-      const { 
-        account: latestAccount, 
+      const {
+        account: latestAccount,
         currentPrice: latestCurrentPrice,
         trades: latestTrades,
         chartData: latestChartData,
@@ -398,46 +395,46 @@ export const useTradingSimulator = (initialSettings: TradingSettings, backtestDa
       } = summaryStateRef.current;
 
       if (isRunningRef.current && latestChartData.length > 1) {
-          const finalValue = latestAccount.quote + latestAccount.base * latestCurrentPrice;
-          const totalProfit = finalValue - latestSettings.initialBalance;
-          
-          const startPrice = startPriceRef.current;
-          const endPrice = latestCurrentPrice;
-          let buyAndHoldProfit = 0;
-          if (startPrice > 0) {
-              const amountBought = latestSettings.initialBalance / startPrice;
-              const finalValueHolding = amountBought * endPrice;
-              buyAndHoldProfit = finalValueHolding - latestSettings.initialBalance;
-          }
+        const finalValue = latestAccount.quote + latestAccount.base * latestCurrentPrice;
+        const totalProfit = finalValue - latestSettings.initialBalance;
 
-          setSimulationSummary({
-              totalProfit: totalProfit,
-              buyAndHoldProfit: buyAndHoldProfit,
-              lowestAccountValue: lowestAccountValueRef.current,
-              highestAccountValue: highestAccountValueRef.current,
-              buyCount: latestTrades.filter(t => t.type === TradeType.BUY).length,
-              sellCount: latestTrades.filter(t => t.type === TradeType.SELL).length,
-              trades: latestTrades,
-          });
+        const startPrice = startPriceRef.current;
+        const endPrice = latestCurrentPrice;
+        let buyAndHoldProfit = 0;
+        if (startPrice > 0) {
+          const amountBought = latestSettings.initialBalance / startPrice;
+          const finalValueHolding = amountBought * endPrice;
+          buyAndHoldProfit = finalValueHolding - latestSettings.initialBalance;
+        }
 
-          // Send Telegram summary on manual stop if configured
-          if (settings.telegramSettings.enableErrorNotifications) { // Using error notification setting for general stop message
-            sendTelegramMessageWrapper(
-              `<b>🛑 Astibot Simulation beendet für ${settings.tradingPair}</b>\n` +
-              `Gesamtgewinn (Bot): ${totalProfit.toFixed(2)} ${latestSettings.tradingPair.split('-')[1]}\n` +
-              `Buy & Hold Gewinn: ${buyAndHoldProfit.toFixed(2)} ${latestSettings.tradingPair.split('-')[1]}\n` +
-              `Käufe: ${latestTrades.filter(t => t.type === TradeType.BUY).length}, Verkäufe: ${latestTrades.filter(t => t.type === TradeType.SELL).length}`
-            );
-          }
+        setSimulationSummary({
+          totalProfit: totalProfit,
+          buyAndHoldProfit: buyAndHoldProfit,
+          lowestAccountValue: lowestAccountValueRef.current,
+          highestAccountValue: highestAccountValueRef.current,
+          buyCount: latestTrades.filter(t => t.type === TradeType.BUY).length,
+          sellCount: latestTrades.filter(t => t.type === TradeType.SELL).length,
+          trades: latestTrades,
+        });
+
+        // Send Telegram summary on manual stop if configured
+        if (settings.telegramSettings.enableErrorNotifications) { // Using error notification setting for general stop message
+          sendTelegramMessageWrapper(
+            `<b>🛑 Astibot Simulation beendet für ${settings.tradingPair}</b>\n` +
+            `Gesamtgewinn (Bot): ${totalProfit.toFixed(2)} ${latestSettings.tradingPair.split('-')[1]}\n` +
+            `Buy & Hold Gewinn: ${buyAndHoldProfit.toFixed(2)} ${latestSettings.tradingPair.split('-')[1]}\n` +
+            `Käufe: ${latestTrades.filter(t => t.type === TradeType.BUY).length}, Verkäufe: ${latestTrades.filter(t => t.type === TradeType.SELL).length}`
+          );
+        }
       }
     }
-    
+
     return () => {
       if (simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
       if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
       if (periodicTelegramTimerRef.current) clearInterval(periodicTelegramTimerRef.current); // Cleanup
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRunning]);
 
   useEffect(() => {

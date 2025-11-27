@@ -26,6 +26,7 @@ export interface TradingSettings {
   maxConcurrentPositions: number;
   simulationDuration: number; // in minutes, 0 for unlimited
   backtestSpeed: number; // in milliseconds per tick
+  granularity: number; // In seconds (60, 300, 900, 3600, 21600, 86400)
   telegramSettings: TelegramSettings;
 }
 

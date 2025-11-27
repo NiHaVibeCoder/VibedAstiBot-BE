@@ -23,7 +23,8 @@ Das Projekt besteht aus einem **React-Frontend** (Vite) und einem **Node.js-Back
 *   **📱 Telegram-Integration:** Erhalte Echtzeit-Benachrichtigungen über Käufe, Verkäufe und Status-Updates direkt auf dein Smartphone.
 *   **📊 Interaktive Charts:** Visualisiere Preisentwicklungen, Indikatoren (SMA, MACD) und Trades direkt im Chart.
 *   **⚙️ Anpassbare Strategien:** Konfiguriere Parameter wie Stop-Loss, Sell-Trigger, Risikolevel und mehr.
-*   **🚀 Live-Trading (Experimentell):** Unterstützung für echte API-Verbindungen (z.B. Gemini) für den realen Handel (mit Vorsicht zu genießen!).
+*   **🚀 Live-Trading (Experimentell):** Unterstützung für echte API-Verbindungen (z.B. Coinbase) für den realen Handel (mit Vorsicht zu genießen!).
+*   **🍓 Raspberry Pi Ready:** Optimiert für 24/7 Betrieb auf Raspberry Pi mit automatischem Neustart und Netzwerkzugriff.
 
 ---
 
@@ -31,6 +32,7 @@ Das Projekt besteht aus einem **React-Frontend** (Vite) und einem **Node.js-Back
 
 *   **Frontend:** React 19, Vite, TailwindCSS, Recharts
 *   **Backend:** Node.js, Express, WebSocket (ws)
+*   **Process Management:** PM2 (für 24/7 Betrieb)
 *   **Sprache:** TypeScript / JavaScript
 *   **Tools:** npm
 
@@ -43,12 +45,12 @@ Das Projekt besteht aus einem **React-Frontend** (Vite) und einem **Node.js-Back
 *   [Node.js](https://nodejs.org/) (Version 18 oder höher empfohlen)
 *   npm (wird mit Node.js installiert)
 
-### Schritt-für-Schritt Anleitung
+### Lokale Entwicklung
 
 1.  **Repository klonen oder herunterladen:**
     ```bash
     git clone <repository-url>
-    cd NiHaAstibot
+    cd VibedAstiBot
     ```
 
 2.  **Abhängigkeiten installieren:**
@@ -78,21 +80,51 @@ Das Projekt besteht aus einem **React-Frontend** (Vite) und einem **Node.js-Back
     ```
     Die App ist dann unter `http://localhost:3000` erreichbar.
 
+### 🍓 Raspberry Pi Deployment (24/7 Betrieb)
+
+Für den 24/7 Betrieb auf einem Raspberry Pi mit Netzwerkzugriff:
+
+1.  **Automatisches Deployment:**
+    ```bash
+    chmod +x deploy.sh
+    ./deploy.sh
+    ```
+
+2.  **Manuelle Installation:**
+    ```bash
+    npm install
+    npm run build
+    sudo npm install -g pm2
+    pm2 start ecosystem.config.js
+    pm2 save
+    pm2 startup
+    ```
+
+3.  **Netzwerkzugriff:**
+    Die App ist dann erreichbar unter:
+    - Lokal: `http://localhost:3000`
+    - Netzwerk: `http://<raspberry-pi-ip>:3000`
+
+**📖 Detaillierte Anleitung:** Siehe [RASPBERRY_PI_SETUP.md](RASPBERRY_PI_SETUP.md) für vollständige Installationsanweisungen, Konfiguration, Troubleshooting und Wartung.
+
 ---
 
 ## ⚙️ Konfiguration
 
 ### Umgebungsvariablen
 
-Du kannst eine `.env` Datei im Hauptverzeichnis erstellen, um Konfigurationen anzupassen (optional):
+Erstelle eine `.env` Datei im Hauptverzeichnis (siehe `.env.example`):
 
 ```env
 # Server Port (Standard: 3000)
 PORT=3000
 
-# API Keys (für Live-Trading, optional)
-GEMINI_API_KEY=dein_api_key
-GEMINI_API_SECRET=dein_api_secret
+# Coinbase API Keys (für Live-Trading, optional)
+COINBASE_API_KEY=dein_api_key
+COINBASE_API_SECRET=dein_api_secret
+
+# Node Environment
+NODE_ENV=production
 ```
 
 ### Telegram Setup
@@ -110,16 +142,52 @@ Um Benachrichtigungen zu erhalten:
 ## 📂 Projektstruktur
 
 ```
-NiHaAstibot/
-├── components/         # React UI-Komponenten (Charts, Modals, Panels)
-├── hooks/              # Custom React Hooks (z.B. useBackendTradingSimulator)
-├── services/           # Logik für Backend-Kommunikation, Simulation, etc.
-├── server.js           # Hauptdatei für den Backend-Server
-├── App.tsx             # Hauptkomponente der React-App
-├── index.tsx           # Einstiegspunkt für React
-├── vite.config.ts      # Vite-Konfiguration (inkl. Proxy-Setup)
-├── package.json        # Abhängigkeiten und Skripte
+VibedAstiBot/
+├── components/              # React UI-Komponenten (Charts, Modals, Panels)
+├── hooks/                   # Custom React Hooks (z.B. useBackendTradingSimulator)
+├── services/                # Logik für Backend-Kommunikation, Simulation, etc.
+├── server.js                # Hauptdatei für den Backend-Server
+├── ecosystem.config.js      # PM2 Konfiguration für 24/7 Betrieb
+├── deploy.sh                # Automatisches Deployment-Skript
+├── astibot.service          # Systemd Service (Alternative zu PM2)
+├── RASPBERRY_PI_SETUP.md    # Raspberry Pi Deployment-Anleitung
+├── App.tsx                  # Hauptkomponente der React-App
+├── index.tsx                # Einstiegspunkt für React
+├── vite.config.ts           # Vite-Konfiguration (inkl. Proxy-Setup)
+├── package.json             # Abhängigkeiten und Skripte
 └── ...
+```
+
+---
+
+## 🔧 PM2 Management (Raspberry Pi)
+
+Nützliche Befehle für den 24/7 Betrieb:
+
+```bash
+# Status prüfen
+pm2 status
+
+# Logs anzeigen
+pm2 logs astibot
+
+# Anwendung neu starten
+pm2 restart astibot
+
+# Anwendung stoppen
+pm2 stop astibot
+
+# Ressourcen überwachen
+pm2 monit
+```
+
+Oder verwende die npm-Skripte:
+
+```bash
+npm run pm2:status
+npm run pm2:logs
+npm run pm2:restart
+npm run pm2:stop
 ```
 
 ---
@@ -145,3 +213,11 @@ Dieses Projekt ist aktuell nicht lizenziert. Kontaktieren Sie den Autor für Ver
 ## ⚠️ Haftungsausschluss
 
 Die Software wird "wie besehen" bereitgestellt, ohne jegliche Garantie. Der Autor haftet nicht für finanzielle Verluste, die durch die Nutzung dieses Bots entstehen könnten. Krypto-Trading birgt hohe Risiken.
+
+---
+
+## 🔗 Weitere Ressourcen
+
+- **[Raspberry Pi Setup Guide](RASPBERRY_PI_SETUP.md)** - Vollständige Anleitung für 24/7 Deployment
+- **Coinbase API** - [Dokumentation](https://docs.cloud.coinbase.com/)
+- **PM2** - [Dokumentation](https://pm2.keymetrics.io/)

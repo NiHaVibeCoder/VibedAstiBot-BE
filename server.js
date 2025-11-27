@@ -5,6 +5,14 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFileSync } from 'fs';
+import { coinbaseService } from './services/coinbaseService.js';
+
+// Load env vars if not already loaded (e.g. via dotenv in dev, or system envs)
+const API_KEY = process.env.COINBASE_API_KEY || '';
+const API_SECRET = process.env.COINBASE_API_SECRET || '';
+if (API_KEY && API_SECRET) {
+  coinbaseService.setCredentials(API_KEY, API_SECRET);
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,6 +40,8 @@ let tradingState = {
   startPrice: 0,
   lowestAccountValue: 0,
   highestAccountValue: 0,
+  isLive: false,
+  isProcessingTick: false,
 };
 
 // Trading Logic (aus simulationService.ts)
@@ -42,13 +52,13 @@ const calculateSMA = (data, period) => {
 };
 
 // Trading Tick Logic
-const runTradingTick = () => {
+const runTradingTick = async () => {
   if (!tradingState.isRunning || !tradingState.settings) return;
 
   const { settings, backtestData, backtestIndex } = tradingState;
-  
+
   let newPrice, newTime;
-  
+
   if (backtestData && backtestData.length > 0) {
     if (backtestIndex >= backtestData.length) {
       // Backtest beendet
@@ -60,14 +70,18 @@ const runTradingTick = () => {
     newTime = point.time;
     tradingState.backtestIndex = backtestIndex + 1;
   } else {
-    // Live Simulation
-    if (tradingState.chartData.length === 0) return;
-    const lastPoint = tradingState.chartData[tradingState.chartData.length - 1];
-    const volatility = 0.008;
-    const drift = 0.00005;
-    const change = (Math.random() - 0.5 + drift) * volatility * lastPoint.price;
-    newPrice = Math.max(lastPoint.price + change, 1);
-    newTime = Date.now();
+    // Live Simulation / Trading
+    if (tradingState.isProcessingTick) return;
+    tradingState.isProcessingTick = true;
+
+    try {
+      newPrice = await coinbaseService.getPrice(settings.tradingPair);
+      newTime = Date.now();
+    } catch (error) {
+      console.error('Error fetching price:', error);
+      tradingState.isProcessingTick = false;
+      return; // Skip this tick
+    }
   }
 
   // Update chart data
@@ -76,20 +90,21 @@ const runTradingTick = () => {
   const slowPeriod = Math.round(15 + (100 - settings.dipsSensitivity) * 0.85);
   const fastMA = calculateSMA(priceHistory, fastPeriod);
   const slowMA = calculateSMA(priceHistory, slowPeriod);
-  
+
   const riskPeriod = Math.floor(slowPeriod * 1.5);
   const marketAverage = calculateSMA(priceHistory, riskPeriod);
   const riskLine = marketAverage ? marketAverage * (0.9 + (settings.riskLevel - 50) / 500) : undefined;
 
-  const prevFastMA = tradingState.chartData.length > 1 
-    ? tradingState.chartData[tradingState.chartData.length - 2].fastMA 
+  const prevFastMA = tradingState.chartData.length > 1
+    ? tradingState.chartData[tradingState.chartData.length - 2].fastMA
     : undefined;
-  const prevSlowMA = tradingState.chartData.length > 1 
-    ? tradingState.chartData[tradingState.chartData.length - 2].slowMA 
+  const prevSlowMA = tradingState.chartData.length > 1
+    ? tradingState.chartData[tradingState.chartData.length - 2].slowMA
     : undefined;
 
   const newPoint = { time: newTime, price: newPrice, fastMA, slowMA, riskLine };
-  tradingState.chartData = [...tradingState.chartData, newPoint].slice(-200);
+  // Keep only last 100 points to optimize memory on Raspberry Pi
+  tradingState.chartData = [...tradingState.chartData, newPoint].slice(-100);
   tradingState.currentPrice = newPrice;
 
   if (!fastMA || !slowMA || !prevFastMA || !prevSlowMA) {
@@ -106,7 +121,7 @@ const runTradingTick = () => {
     const pos = tradingState.openPositions[i];
     const stopLossPrice = pos.price * (1 - settings.stopLossPercentage / 100);
     const sellTriggerPrice = pos.price * (1 + settings.sellTriggerPercentage / 100);
-    
+
     if (newPrice <= stopLossPrice) {
       positionToSell = pos;
       reasonForSale = 'Stop Loss';
@@ -133,7 +148,7 @@ const runTradingTick = () => {
       base: tradingState.account.base - sellAmount,
       quote: tradingState.account.quote + sellAmount * newPrice
     };
-    
+
     const sellTrade = {
       id: tradingState.tradeIdCounter++,
       type: 'SELL',
@@ -142,13 +157,19 @@ const runTradingTick = () => {
       amount: sellAmount,
       reason: reasonForSale
     };
-    
+
     tradingState.trades.push(sellTrade);
     tradingState.openPositions.splice(positionIndex, 1);
-    
+
     // Telegram Notification
     if (settings.telegramSettings?.enableSellNotifications && settings.telegramSettings?.isTested) {
       sendTelegramNotification(settings, `💸 <b>Verkauf ausgeführt</b>\n\nPreis: ${newPrice.toFixed(2)}\nMenge: ${sellAmount.toFixed(6)}\nGrund: ${reasonForSale}`);
+    }
+
+    // Real Trading Execution
+    if (tradingState.isLive) {
+      coinbaseService.placeOrder(settings.tradingPair, 'sell', sellAmount.toString())
+        .catch(err => console.error('Real Sell Order Failed:', err));
     }
   }
   // BUY LOGIC
@@ -161,7 +182,7 @@ const runTradingTick = () => {
           base: tradingState.account.base + buyAmount,
           quote: tradingState.account.quote - tradeAmountQuote
         };
-        
+
         const buyTrade = {
           id: tradingState.tradeIdCounter++,
           type: 'BUY',
@@ -170,13 +191,19 @@ const runTradingTick = () => {
           amount: buyAmount,
           reason: 'MACD Crossover'
         };
-        
+
         tradingState.openPositions.push(buyTrade);
         tradingState.trades.push(buyTrade);
-        
+
         // Telegram Notification
         if (settings.telegramSettings?.enableBuyNotifications && settings.telegramSettings?.isTested) {
           sendTelegramNotification(settings, `💰 <b>Kauf ausgeführt</b>\n\nPreis: ${newPrice.toFixed(2)}\nMenge: ${buyAmount.toFixed(6)}\nGrund: MACD Crossover`);
+        }
+
+        // Real Trading Execution
+        if (tradingState.isLive) {
+          coinbaseService.placeOrder(settings.tradingPair, 'buy', buyAmount.toString()) // Note: 'buy' usually requires size in base currency or funds in quote currency depending on order type. Market buy often uses 'funds' (quote) or 'size' (base). coinbaseService uses 'size' (base).
+            .catch(err => console.error('Real Buy Order Failed:', err));
         }
       }
     }
@@ -192,6 +219,10 @@ const runTradingTick = () => {
   }
 
   broadcastUpdate();
+
+  if (!backtestData) {
+    tradingState.isProcessingTick = false;
+  }
 };
 
 // Telegram Notification
@@ -200,7 +231,7 @@ const sendTelegramNotification = async (settings, message) => {
   if (!botToken || !chatId) return;
 
   const chatIds = chatId.split(',').map(id => id.trim()).filter(id => id);
-  
+
   for (const id of chatIds) {
     try {
       const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
@@ -224,7 +255,7 @@ const sendTelegramNotification = async (settings, message) => {
 let tradingInterval = null;
 let periodicTelegramInterval = null;
 
-const startTrading = (settings, backtestData = null) => {
+const startTrading = async (settings, backtestData = null, isLive = false) => {
   if (tradingState.isRunning) return;
 
   tradingState.settings = settings;
@@ -242,22 +273,33 @@ const startTrading = (settings, backtestData = null) => {
     tradingState.startPrice = backtestData[0].price;
     tradingState.chartData = [];
   } else {
-    const startingPrice = Math.random() * 800 + 400;
-    tradingState.currentPrice = startingPrice;
-    tradingState.startPrice = startingPrice;
-    tradingState.chartData = [{ time: Date.now(), price: startingPrice }];
+    // Live Mode - Fetch initial price
+    try {
+      const price = await coinbaseService.getPrice(settings.tradingPair);
+      tradingState.currentPrice = price;
+      tradingState.startPrice = price;
+      tradingState.chartData = [{ time: Date.now(), price: price }];
+    } catch (e) {
+      console.error("Failed to start: Could not fetch initial price", e);
+      return;
+    }
   }
 
   tradingState.isRunning = true;
+  tradingState.isLive = isLive;
 
-  const tickInterval = backtestData ? settings.backtestSpeed || 50 : 1000;
+  // Use granularity from settings for live simulation, backtestSpeed for backtesting
+  const tickInterval = backtestData
+    ? (settings.backtestSpeed || 50)
+    : (settings.granularity ? settings.granularity * 1000 : 60000); // Default to 1 minute if not set
+
   tradingInterval = setInterval(runTradingTick, tickInterval);
 
   // Periodic Telegram Messages
   if (settings.telegramSettings?.enablePeriodicMessages && settings.telegramSettings?.isTested) {
     const intervalMap = { '30m': 30 * 60 * 1000, '1h': 60 * 60 * 1000, '12h': 12 * 60 * 60 * 1000, '24h': 24 * 60 * 60 * 1000, '48h': 48 * 60 * 60 * 1000 };
     const interval = intervalMap[settings.telegramSettings.periodicMessageInterval] || 60 * 60 * 1000;
-    
+
     periodicTelegramInterval = setInterval(() => {
       const accountValue = tradingState.account.quote + tradingState.account.base * tradingState.currentPrice;
       const profit = accountValue - settings.initialBalance;
@@ -294,7 +336,7 @@ const broadcastUpdate = () => {
       currentPrice: tradingState.currentPrice,
       trades: tradingState.trades,
       chartData: tradingState.chartData,
-      profit: tradingState.account ? 
+      profit: tradingState.account ?
         (tradingState.account.quote + tradingState.account.base * tradingState.currentPrice - tradingState.settings?.initialBalance) : 0,
       backtestProgress: tradingState.backtestData && tradingState.backtestData.length > 0 ?
         (tradingState.backtestIndex / tradingState.backtestData.length) * 100 : 0,
@@ -310,18 +352,25 @@ const broadcastUpdate = () => {
 
 // WebSocket Connection
 wss.on('connection', (ws) => {
-  console.log('Client connected');
-  
+  // Limit connections to prevent resource exhaustion on Raspberry Pi
+  if (wss.clients.size > 10) {
+    console.warn('⚠️  Max WebSocket connections reached, rejecting new connection');
+    ws.close(1008, 'Server at capacity');
+    return;
+  }
+
+  console.log('✅ New WebSocket connection established');
+
   // Send current state immediately
   broadcastUpdate();
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message.toString());
-      
+
       switch (data.type) {
         case 'start':
-          startTrading(data.settings, data.backtestData);
+          startTrading(data.settings, data.backtestData, data.isLive);
           break;
         case 'stop':
           stopTrading();
@@ -341,7 +390,6 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected');
   });
 });
 
@@ -361,9 +409,21 @@ app.get('/api/state', (req, res) => {
 });
 
 app.post('/api/start', (req, res) => {
-  const { settings, backtestData } = req.body;
-  startTrading(settings, backtestData);
+  const { settings, backtestData, isLive } = req.body;
+  startTrading(settings, backtestData, isLive);
   res.json({ success: true });
+});
+
+app.get('/api/products', async (req, res) => {
+  const products = await coinbaseService.getProducts();
+  res.json(products);
+});
+
+app.get('/api/candles/:pair', async (req, res) => {
+  const { pair } = req.params;
+  const { start, end, granularity } = req.query;
+  const candles = await coinbaseService.getHistoricalData(pair, start, end, parseInt(granularity) || 3600);
+  res.json(candles);
 });
 
 app.post('/api/stop', (req, res) => {
@@ -378,7 +438,53 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Trading Bot Server läuft auf Port ${PORT}`);
-  console.log(`📡 WebSocket Server bereit für Verbindungen`);
+  console.log(`🚀 Astibot server running on port ${PORT}`);
+  console.log(`📡 Local: http://localhost:${PORT}`);
+  console.log(`🌐 Network: http://0.0.0.0:${PORT}`);
+
+  // Signal PM2 that the app is ready
+  if (process.send) {
+    process.send('ready');
+  }
+});
+
+// Graceful shutdown handling
+const gracefulShutdown = (signal) => {
+  console.log(`\n${signal} received. Closing server gracefully...`);
+
+  // Stop trading if running
+  if (tradingState.isRunning) {
+    stopTrading();
+  }
+
+  // Close WebSocket connections
+  wss.clients.forEach(client => {
+    client.close(1000, 'Server shutting down');
+  });
+
+  // Close HTTP server
+  server.close(() => {
+    console.log('✅ Server closed successfully');
+    process.exit(0);
+  });
+
+  // Force close after 10 seconds
+  setTimeout(() => {
+    console.error('⚠️  Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
 });
 

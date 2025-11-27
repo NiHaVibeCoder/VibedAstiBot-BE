@@ -41,7 +41,6 @@ async function sendTelegramMessageToSingleChat(botToken: string, chatId: string,
       console.error('Telegram API error:', errorData);
       throw new Error(`Telegram API error: ${errorData.description || response.statusText}`);
     }
-    console.log(`Telegram message sent successfully to chat ${chatId}.`);
   } catch (error) {
     console.error(`Error sending Telegram message to chat ${chatId}:`, error);
     throw error;
@@ -88,10 +87,10 @@ export async function testTelegramConnection(botToken: string, chatId: string): 
   try {
     const testMessage = '<b>✅ Verbindungstest erfolgreich!</b>\n\nAstibot kann jetzt Nachrichten an diesen Chat senden.';
     const results = await sendTelegramMessage(botToken, chatId, testMessage);
-    
+
     const successful = results.filter(r => r.success);
     const failed = results.filter(r => !r.success);
-    
+
     if (successful.length === 0) {
       // All failed
       const firstError = failed[0]?.error || 'Unbekannter Fehler';
@@ -104,16 +103,16 @@ export async function testTelegramConnection(botToken: string, chatId: string): 
     } else if (failed.length > 0) {
       // Some succeeded, some failed
       const failedIds = failed.map(r => r.chatId).join(', ');
-      return { 
-        success: true, 
-        message: `Testnachricht wurde an ${successful.length} von ${results.length} Chat(s) erfolgreich gesendet. Fehler bei: ${failedIds}` 
+      return {
+        success: true,
+        message: `Testnachricht wurde an ${successful.length} von ${results.length} Chat(s) erfolgreich gesendet. Fehler bei: ${failedIds}`
       };
     } else {
       // All succeeded
       const chatCount = successful.length;
-      return { 
-        success: true, 
-        message: `Verbindungstest erfolgreich! Testnachricht wurde an ${chatCount} Chat(s) gesendet.` 
+      return {
+        success: true,
+        message: `Verbindungstest erfolgreich! Testnachricht wurde an ${chatCount} Chat(s) gesendet.`
       };
     }
   } catch (error: any) {

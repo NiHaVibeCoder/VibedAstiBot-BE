@@ -1,16 +1,9 @@
 import type { TradingSettings } from './types';
 
-export const TRADING_PAIRS: string[] = [
-  'BTC-USD',
-  'ETH-USD',
-  'SOL-USD',
-  'BCH-EUR',
-  'LTC-USD',
-  'ADA-USD',
-];
+export const TRADING_PAIRS: string[] = []; // Deprecated, fetched from API
 
 export const DEFAULT_SETTINGS: TradingSettings = {
-  tradingPair: 'BCH-EUR',
+  tradingPair: 'BTC-USD', // Default to a major pair
   dipsSensitivity: 50, // 0-100 scale
   riskLevel: 50, // 0-100 scale
   stopLossPercentage: 5, // 5%
@@ -20,6 +13,7 @@ export const DEFAULT_SETTINGS: TradingSettings = {
   maxConcurrentPositions: 5,
   simulationDuration: 10, // in minutes, 0 for unlimited
   backtestSpeed: 50, // ms per tick for backtesting
+  granularity: 60, // Default to 1 minute
   telegramSettings: {
     botToken: '',
     chatId: '',
