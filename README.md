@@ -1,15 +1,3 @@
-# Astibot — Crypto Trading Bot Simulator
-
-<div align="center">
-<img width="1200" height="475" alt="Astibot Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
-
-## 📋 Übersicht
-
-**Astibot** ist ein fortschrittlicher Crypto-Trading-Bot-Simulator, der entwickelt wurde, um Handelsstrategien in einer sicheren Umgebung zu testen, zu optimieren und zu simulieren. Er bietet eine moderne Web-Oberfläche, Echtzeit-Charts, Backtesting-Funktionen und eine nahtlose Integration mit Telegram für Benachrichtigungen.
-
-Das Projekt besteht aus einem **React-Frontend** (Vite) und einem **Node.js-Backend**, das die Trading-Logik ausführt. Dies ermöglicht es dem Bot, auch dann weiterzulaufen, wenn der Browser geschlossen ist.
-
 ⚠️ **WICHTIG:** Dieses Projekt dient ausschließlich zu Demonstrations-, Lern- und Testzwecken. Es handelt sich **nicht** um eine Finanzberatung. Die Nutzung für echtes Trading erfolgt auf eigene Gefahr.
 
 ---
