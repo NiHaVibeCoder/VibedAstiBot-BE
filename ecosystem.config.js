@@ -1,3 +1,8 @@
+/**
+ * PM2 Ecosystem Configuration
+ * Configuration for running Astibot in production with PM2 process manager
+ * @see https://pm2.keymetrics.io/docs/usage/application-declaration/
+ */
 module.exports = {
     apps: [{
         name: 'astibot',
